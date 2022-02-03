@@ -89,3 +89,4 @@ target/
 .mypy_cache/
 reports/format of report.docx
 reports/~$pstone Project Abstract.docx
+reports/figures/*.csv
