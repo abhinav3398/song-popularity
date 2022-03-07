@@ -87,6 +87,5 @@ target/
 
 # Mypy cache
 .mypy_cache/
-reports/format of report.docx
-reports/~$pstone Project Abstract.docx
-reports/figures/*.csv
+reports/Capstone Project Abstract.docx
+reports/~WRL1183.tmp
