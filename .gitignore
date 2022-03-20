@@ -92,3 +92,4 @@ reports/~$pstone Project Abstract.docx
 reports/figures/*.csv
 
 .history
+*.zip
