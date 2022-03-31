@@ -32,12 +32,14 @@ This module, besides the model selection functions, contains also some utilities
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from sklearn.utils import resample
-from sklearn.model_selection import train_test_split, cross_val_score, TimeSeriesSplit, GridSearchCV
-from sklearn.metrics import mean_squared_error, accuracy_score
+from sklearn.model_selection import learning_curve, train_test_split, cross_val_score, TimeSeriesSplit, GridSearchCV
+from sklearn.metrics import auc, classification_report, mean_squared_error, accuracy_score, roc_curve, ConfusionMatrixDisplay
 from sklearn.preprocessing import MinMaxScaler, PolynomialFeatures
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, accuracy_score, r2_score, mean_absolute_error, roc_auc_score, f1_score, accuracy_score, precision_score, recall_score, confusion_matrix
 
 import logging
 # logging.basicConfig(filename='modeling.log', filemode='a', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -511,7 +513,7 @@ def hyperparameter_validation(X, y, model, hyperparameter, hyperparameter_values
 
     param_grid = {hyperparameter:hyperparameter_values} # Create the hyperparameter grid
     # Call the function for the validation of an arbitrary number of hyperparameters
-    params, train_val_scores, best_index, test_score = hyperparameters_validation(X, y, model, param_grid, scale=scale,
+    params, grid_search, test_score = hyperparameters_validation(X, y, model, param_grid, scale=scale,
                                                                                   test_size=test_size,
                                                                                   time_series=time_series,
                                                                                   random_state=random_state, n_folds=n_folds,
@@ -519,14 +521,14 @@ def hyperparameter_validation(X, y, model, hyperparameter, hyperparameter_values
 
     ax = None
 
-    if(plot): # Make the plot
-        if not xvalues: # Default values on the x axis
-            xvalues = hyperparameter_values
-        if not xlabel: # Default label on the x axis
-            xlabel = hyperparameter
-        ax = _plot_TrainVal_values(xvalues, train_val_scores, plot_train, xlabel, title, figsize)
+    # if(plot): # Make the plot
+    #     if not xvalues: # Default values on the x axis
+    #         xvalues = hyperparameter_values
+    #     if not xlabel: # Default label on the x axis
+    #         xlabel = hyperparameter
+    #     ax = _plot_TrainVal_values(xvalues, train_val_scores, plot_train, xlabel, title, figsize)
 
-    return train_val_scores, best_index, test_score, ax
+    return params, grid_search, test_score
 
 
 def hyperparameters_validation(X, y, model, param_grid, scale=False, test_size=0.2, time_series=False, random_state=123,
@@ -632,6 +634,7 @@ def hyperparameters_validation(X, y, model, param_grid, scale=False, test_size=0
     grid_search = GridSearchCV(model,param_grid,cv=cv,return_train_score=True, **kwargs)
     grid_search.fit(X_train_80,y_train_80)
 
+    logging.info(grid_search.cv_results_.keys())
     params = grid_search.cv_results_["params"] # List of all the possible combinations of hyperparameters values
     # List where for all the possible combinations of hyperparameters values there is the associated training score
     train_scores = grid_search.cv_results_["mean_train_score"]
@@ -647,20 +650,363 @@ def hyperparameters_validation(X, y, model, param_grid, scale=False, test_size=0
         val_scores = val_scores*(-1)
     train_val_scores = np.concatenate((train_scores.reshape(-1,1), val_scores.reshape(-1,1)), axis=1)
 
-    # Fit the best model on all the training set
-    best_model.fit(X_train_80,y_train_80)
+    # # Fit the best model on all the training set
+    # best_model.fit(X_train_80,y_train_80)
 
     # Compute the test score of the best model
-    test_score=0
-    if regr:
-        test_score = mean_squared_error(y_true=y_test, y_pred=best_model.predict(X_test))
-    else:
-        test_score = accuracy_score(y_true=y_test, y_pred=best_model.predict(X_test))
+    test_score=grid_search.score(X_test,y_test)
+    # if regr:
+    #     test_score = mean_squared_error(y_true=y_test, y_pred=best_model.predict(X_test))
+    # else:
+    #     if kwargs.get("scoring")=="accuracy":
+    #         # test_score = best_model.score(X_test,y_test)
+    #         test_score = accuracy_score(y_true=y_test, y_pred=best_model.predict(X_test))
+    #     elif kwargs.get("scoring")=="f1":
+    #         test_score = f1_score(y_true=y_test, y_pred=best_model.predict(X_test))
+    #     elif kwargs.get("scoring")=="precision":
+    #         test_score = precision_score(y_true=y_test, y_pred=best_model.predict(X_test))
+    #     elif kwargs.get("scoring")=="recall":
+    #         test_score = recall_score(y_true=y_test, y_pred=best_model.predict(X_test))
+    #     elif kwargs.get("scoring")=="roc_auc":
+    #         test_score = roc_auc_score(y_true=y_test, y_score=best_model.predict_proba(X_test))
+    #     else:
+    #         # use accuracy as default
+    #         test_score = accuracy_score(y_true=y_test, y_pred=best_model.predict(X_test))
 
-    return params, train_val_scores, best_index, test_score
+    return params, grid_search, test_score
 
+def plot_learning_curve(
+    estimator,
+    X,
+    y,
+    title,
+    axes=None,
+    ylim=None,
+    scoring=None,
+    cv=5,
+    n_jobs=-1,
+    train_sizes=np.linspace(0.1, 1.0, 5),
+):
+    """
+    Generate 3 plots: the test and training learning curve, the training
+    samples vs fit times curve, the fit times vs score curve.
 
-def models_validation(X, y, model_paramGrid_list, scale_list=None, test_size=0.2, time_series=False, random_state=123,
+    Parameters
+    ----------
+    estimator : estimator instance
+        An estimator instance implementing `fit` and `predict` methods which
+        will be cloned for each validation.
+
+    title : str
+        Title for the chart.
+
+    X : array-like of shape (n_samples, n_features)
+        Training vector, where ``n_samples`` is the number of samples and
+        ``n_features`` is the number of features.
+
+    y : array-like of shape (n_samples) or (n_samples, n_features)
+        Target relative to ``X`` for classification or regression;
+        None for unsupervised learning.
+
+    axes : array-like of shape (3,), default=None
+        Axes to use for plotting the curves.
+
+    ylim : tuple of shape (2,), default=None
+        Defines minimum and maximum y-values plotted, e.g. (ymin, ymax).
+
+    cv : int, cross-validation generator or an iterable, default=None
+        Determines the cross-validation splitting strategy.
+        Possible inputs for cv are:
+
+          - None, to use the default 5-fold cross-validation,
+          - integer, to specify the number of folds.
+          - :term:`CV splitter`,
+          - An iterable yielding (train, test) splits as arrays of indices.
+
+        For integer/None inputs, if ``y`` is binary or multiclass,
+        :class:`StratifiedKFold` used. If the estimator is not a classifier
+        or if ``y`` is neither binary nor multiclass, :class:`KFold` is used.
+
+        Refer :ref:`User Guide <cross_validation>` for the various
+        cross-validators that can be used here.
+
+    n_jobs : int or None, default=None
+        Number of jobs to run in parallel.
+        ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.
+        ``-1`` means using all processors. See :term:`Glossary <n_jobs>`
+        for more details.
+
+    train_sizes : array-like of shape (n_ticks,)
+        Relative or absolute numbers of training examples that will be used to
+        generate the learning curve. If the ``dtype`` is float, it is regarded
+        as a fraction of the maximum size of the training set (that is
+        determined by the selected validation method), i.e. it has to be within
+        (0, 1]. Otherwise it is interpreted as absolute sizes of the training
+        sets. Note that for classification the number of samples usually have
+        to be big enough to contain at least one sample from each class.
+        (default: np.linspace(0.1, 1.0, 5))
+    """
+    if axes is None:
+        _, axes = plt.subplots(1, 3, figsize=(20, 5))
+
+    axes[0].set_title(title)
+    if ylim is not None:
+        axes[0].set_ylim(*ylim)
+    axes[0].set_xlabel("Training examples")
+    axes[0].set_ylabel("Score")
+
+    train_sizes, train_scores, test_scores, fit_times, _ = learning_curve(
+        estimator,
+        X,
+        y,
+        scoring=estimator.scoring,
+        cv=cv,
+        n_jobs=n_jobs,
+        train_sizes=train_sizes,
+        return_times=True,
+    )
+    train_scores_mean = np.mean(train_scores, axis=1)
+    train_scores_std = np.std(train_scores, axis=1)
+    test_scores_mean = np.mean(test_scores, axis=1)
+    test_scores_std = np.std(test_scores, axis=1)
+    fit_times_mean = np.mean(fit_times, axis=1)
+    fit_times_std = np.std(fit_times, axis=1)
+
+    # Plot learning curve
+    axes[0].grid()
+    axes[0].fill_between(
+        train_sizes,
+        train_scores_mean - train_scores_std,
+        train_scores_mean + train_scores_std,
+        alpha=0.1,
+        color="r",
+    )
+    axes[0].fill_between(
+        train_sizes,
+        test_scores_mean - test_scores_std,
+        test_scores_mean + test_scores_std,
+        alpha=0.1,
+        color="g",
+    )
+    axes[0].plot(
+        train_sizes, train_scores_mean, "o-", color="r", label="Training score"
+    )
+    axes[0].plot(
+        train_sizes, test_scores_mean, "o-", color="g", label="Cross-validation score"
+    )
+    axes[0].legend(loc="best")
+
+    # Plot n_samples vs fit_times
+    axes[1].grid()
+    axes[1].plot(train_sizes, fit_times_mean, "o-")
+    axes[1].fill_between(
+        train_sizes,
+        fit_times_mean - fit_times_std,
+        fit_times_mean + fit_times_std,
+        alpha=0.1,
+    )
+    axes[1].set_xlabel("Training examples")
+    axes[1].set_ylabel("fit_times")
+    axes[1].set_title("Scalability of the model")
+
+    # Plot fit_time vs score
+    fit_time_argsort = fit_times_mean.argsort()
+    fit_time_sorted = fit_times_mean[fit_time_argsort]
+    test_scores_mean_sorted = test_scores_mean[fit_time_argsort]
+    test_scores_std_sorted = test_scores_std[fit_time_argsort]
+    axes[2].grid()
+    axes[2].plot(fit_time_sorted, test_scores_mean_sorted, "o-")
+    axes[2].fill_between(
+        fit_time_sorted,
+        test_scores_mean_sorted - test_scores_std_sorted,
+        test_scores_mean_sorted + test_scores_std_sorted,
+        alpha=0.1,
+    )
+    axes[2].set_xlabel("fit_times")
+    axes[2].set_ylabel("Score")
+    axes[2].set_title("Performance of the model")
+
+    plt.show()
+
+def plot_confusion_matrix(y_true, y_pred, classes, title, regr=True, cmap=plt.cm.Blues, normalize='true'):
+    """
+    Plot the confusion matrix of the model.
+
+    Parameters
+    ----------
+    y_true: np.array
+        The true target of the dataset.
+    y_pred: np.array
+        The predicted target of the dataset.
+    classes: np.array
+        The classes of the dataset.
+    title: str
+        The title of the plot.
+    regr: bool, optional
+        If True, the confusion matrix is computed as the mean of the errors (MSE, i.e. Mean Squared Errors).
+        Otherwise, the confusion matrix is computed as the mean of the accuracies (i.e. Accuracy).
+        By default, it is True.
+    cmap: matplotlib.colors.Colormap, optional
+        The colormap used to plot the confusion matrix.
+
+    Returns
+    -------
+    None
+    """
+
+    # Compute confusion matrix
+    disp = ConfusionMatrixDisplay.from_predictions(
+        y_true,
+        y_pred,
+        display_labels=classes,
+        # cmap=cmap,
+        normalize=normalize,
+    )
+    disp.ax_.set_title(title)
+    # plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.show()
+
+def plot_roc_curve(y_true, y_score, title, cmap=plt.cm.Blues):
+    """
+    Plot the ROC curve of the model.
+
+    Parameters
+    ----------
+    y_true: np.array
+        The true target of the dataset.
+    y_score: np.array
+        The predicted target of the dataset.
+    title: str
+        The title of the plot.
+    cmap: matplotlib.colors.Colormap, optional
+        The colormap used to plot the confusion matrix.
+
+    Returns
+    -------
+    None
+    """
+
+    # Compute ROC curve and ROC area
+    fpr, tpr, thresholds = roc_curve(y_true=y_true, y_score=y_score)
+    roc_auc = auc(x=fpr, y=tpr)
+
+    # Plot ROC curve
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title(title)
+    plt.legend(loc="lower right")
+    plt.show()
+
+def model_evaluation(grid_search, X, y, cv=5, n_jobs=4, train_sizes=np.linspace(.1, 1.0, 5), title=None):
+    """
+    Get extensive and exhaustive, report including the learning curve, the confusion matrix and the ROC curve.
+
+    Parameters
+    ----------
+    grid_search: sklearn.model_selection.GridSearchCV
+        The grid search object.
+    X: np.array
+        The input of the dataset.
+    y: np.array
+        The target of the dataset.
+    cv: int, cross-validation generator or an iterable, optional
+        Determines the cross-validation splitting strategy.
+        Possible inputs for cv are:
+            - None, to use the default 3-fold cross-validation,
+            - integer, to specify the number of folds.
+            - :term:`CV splitter`,
+            - An iterable yielding (train, test) splits as arrays of indices.
+            For integer/None inputs, if ``y`` is binary or multiclass,
+            :class:`StratifiedKFold` used. If the estimator is a classifier
+            or if ``y`` is neither binary nor multiclass, :class:`KFold` is used.
+            Refer :ref:`User Guide <cross_validation>` for the various
+            cross-validation strategies that can be used here.
+    n_jobs: int, optional
+        Number of jobs to run in parallel.
+        ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.
+        ``-1`` means using all processors. See :term:`Glossary <n_jobs>` for more details.
+    train_sizes: np.array, optional
+        The training set sizes to plot.
+        If None, default to np.linspace(0.1, 1.0, 5)
+
+    Returns
+    -------
+    None
+    """
+
+    # Get extensive and exhaustive report
+    # report = classification_report(y_true=y, y_pred=grid_search.predict(X=X), output_dict=True)
+    # print("\nExtensive and exhaustive report:")
+    # for key in report:
+    #     # print("{:<20}: {:.2f}".format(key, report[key]))
+    #     print(f"{key}: {report[key]}")
+    print(classification_report(y_true=y, y_pred=grid_search.predict(X=X)))
+
+    # Get learning curve
+    # plot_learning_curve(grid_search=grid_search, X=X, y=y, title=title, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes, regr=False)
+
+    # Get confusion matrix
+    plot_confusion_matrix(y_true=y, y_pred=grid_search.predict(X=X), classes=np.unique(y), title=f"Confusion matrix of {title}", regr=False)
+
+    # Get ROC curve
+    # check if the estimator has a predict_proba method
+    if hasattr(grid_search.best_estimator_, 'predict_proba'):
+        plot_roc_curve(y_true=y, y_score=grid_search.best_estimator_.predict_proba(X=X)[:, 1], title=f"ROC curve of {title}")
+    elif hasattr(grid_search.best_estimator_, 'decision_function'):
+        plot_roc_curve(y_true=y, y_score=grid_search.decision_function(X=X), title=f"ROC curve of {title}")
+
+def models_evaluation(grid_searches, X, y, cv=5, n_jobs=4, train_sizes=np.linspace(.1, 1.0, 5), titles=None):
+    """
+    Get extensive and exhaustive, report including the learning curve, the confusion matrix and the ROC curve for all the models.
+
+    Parameters
+    ----------
+    grid_searches: list
+        The grid search objects.
+    X: np.array
+        The input of the dataset.
+    y: np.array
+        The target of the dataset.
+    cv: int, cross-validation generator or an iterable, optional
+        Determines the cross-validation splitting strategy.
+        Possible inputs for cv are:
+            - None, to use the default 3-fold cross-validation,
+            - integer, to specify the number of folds.
+            - :term:`CV splitter`,
+            - An iterable yielding (train, test) splits as arrays of indices.
+            For integer/None inputs, if ``y`` is binary or multiclass,
+            :class:`StratifiedKFold` used. If the estimator is a classifier
+            or if ``y`` is neither binary nor multiclass, :class:`KFold` is used.
+            Refer :ref:`User Guide <cross_validation>` for the various
+            cross-validation strategies that can be used here.
+    n_jobs: int, optional
+        Number of jobs to run in parallel.
+        ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.
+        ``-1`` means using all processors. See :term:`Glossary <n_jobs>` for more details.
+    train_sizes: np.array, optional
+        The training set sizes to plot.
+        If None, default to np.linspace(0.1, 1.0, 5)
+
+    Returns
+    -------
+    None
+    """
+
+    # Get extensive and exhaustive report for all the models
+    for i, grid_search in enumerate(grid_searches):
+        model_evaluation(grid_search=grid_search, X=X, y=y, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes, title=titles[i])
+
+def models_building(X, y, model_paramGrid_list, scale_list=None, test_size=0.2, time_series=False, random_state=123,
                       n_folds=5, regr=True, show_progress=False, logger=None, plot=False, plot_train=False, xvalues=None, xlabel="Models",
                       title="Models validation", figsize=(6,6), **kwargs):
     """
@@ -772,58 +1118,60 @@ def models_validation(X, y, model_paramGrid_list, scale_list=None, test_size=0.2
     elif scale_list is True: # `scale_list` is True
         scale_list = [True]*len(model_paramGrid_list)
 
-    # Numpy matrix (np.array) which has as many rows as the models and which has two columns, one for the training scores and
-    # the other for the validation scores. At the beginning it is a list of tuples.
-    models_train_val_score = []
-    # List which has as many elements as the models: for each model there is the dictionary of the best combination of
-    # hyperparameters values.
-    models_best_params = []
-    # List which has as many elements as the models: for each model there is the test score (associated with the best
-    # combination of hyperparameters values).
-    models_test_score = []
+    # # Numpy matrix (np.array) which has as many rows as the models and which has two columns, one for the training scores and
+    # # the other for the validation scores. At the beginning it is a list of tuples.
+    # models_train_val_score = []
+    # # List which has as many elements as the models: for each model there is the dictionary of the best combination of
+    # # hyperparameters values.
+    # models_best_params = []
+    # # List which has as many elements as the models: for each model there is the test score (associated with the best
+    # # combination of hyperparameters values).
+    # models_test_score = []
+    models = []
 
     for i,triple in enumerate(model_paramGrid_list): # Iterate through all the cuples model-param_grid
-        model,param_grid = triple[1:]
+        model_name, model,param_grid = triple
 
         # Apply the grid search on model-param_grid
-        params, train_val_scores, best_index, test_score = hyperparameters_validation(X, y, model, param_grid,
+        params, grid_search, test_score = hyperparameters_validation(X, y, model, param_grid,
                                                                                       scale=scale_list[i],
                                                                                       test_size=test_size,
                                                                                       time_series=time_series,
                                                                                       random_state=random_state,
                                                                                       n_folds=n_folds, regr=regr, **kwargs)
-
-        models_train_val_score.append(tuple(train_val_scores[best_index])) # Add the row for that model
-        models_best_params.append(params[best_index]) # Add the element for that model
-        models_test_score.append(test_score) # Add the element for that model
+        models.append((model_name, model, params, grid_search, test_score))
+        # models_train_val_score.append(tuple(train_val_scores[best_index])) # Add the row for that model
+        # models_best_params.append(params[best_index]) # Add the element for that model
+        # models_test_score.append(test_score) # Add the element for that model
         if show_progress:
-            logger.log(logging.INFO, f'Model {i+1}/{len(model_paramGrid_list)} done')
-            logger.log(logging.INFO, f'\tBest params: {models_best_params[-1]}')
-            logger.log(logging.INFO, f'\tTrain score: {models_train_val_score[-1][0]}')
-            logger.log(logging.INFO, f'\tVal score: {models_train_val_score[-1][1]}')
-            logger.log(logging.INFO, f'\tTest score: {models_test_score[-1]}')
+            logger.log(logging.INFO, f'Model {i+1}/{len(model_paramGrid_list)} done : {model_paramGrid_list[i][0]}')
+            # logger.log(logging.INFO, f'\tBest params: {models_best_params[-1]}')
+            # logger.log(logging.INFO, f'\tTrain score: {models_train_val_score[-1][0]}')
+            # logger.log(logging.INFO, f'\tVal score: {models_train_val_score[-1][1]}')
+            # logger.log(logging.INFO, f'\tTest score: {models_test_score[-1]}')
 
-    models_train_val_score = np.array(models_train_val_score) # Transform into numpy matrix (i.e. np.array)
+    # models_train_val_score = np.array(models_train_val_score) # Transform into numpy matrix (i.e. np.array)
 
-    # Find the best index (i.e. the best model)
-    if regr:
-        best_index = np.argmin(models_train_val_score,axis=0)[1]
-    else:
-        best_index = np.argmax(models_train_val_score,axis=0)[1]
+    # # Find the best index (i.e. the best model)
+    # if regr:
+    #     best_index = np.argmin(models_train_val_score,axis=0)[1]
+    # else:
+    #     best_index = np.argmax(models_train_val_score,axis=0)[1]
 
-    # Test score of the best model
-    test_score = models_test_score[best_index]
-    logger.log(logging.INFO, f'Best model: {best_index+1}/{len(model_paramGrid_list)}')
+    # # Test score of the best model
+    # test_score = models_test_score[best_index]
+    # logger.log(logging.INFO, f'Best model: {best_index+1}/{len(model_paramGrid_list)} : {model_paramGrid_list[best_index][0]}')
 
-    ax = None
-    if(plot): # Make the plot
-        if not xvalues: # Default values for the x axis
-            xvalues = [model_paramGrid_list[i][0] for i in range(len(model_paramGrid_list))]
-        ax = _plot_TrainVal_values(xvalues, models_train_val_score, plot_train, xlabel, title, figsize, bar=True)
+    # ax = None
+    # if(plot): # Make the plot
+    #     if not xvalues: # Default values for the x axis
+    #         xvalues = [model_paramGrid_list[i][0] for i in range(len(model_paramGrid_list))]
+    #     ax = _plot_TrainVal_values(xvalues, models_train_val_score, plot_train, xlabel, title, figsize, bar=True)
     
     logger.log(logging.INFO, '-----------------------------------------------------------')
-
-    return models_train_val_score, models_best_params, best_index, test_score, ax
+    logger.log(logging.INFO, models)
+    models.sort(key=lambda x: x[-1], reverse=True)
+    return models
 
 
 
