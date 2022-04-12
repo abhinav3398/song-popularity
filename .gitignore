@@ -98,3 +98,7 @@ notebooks/0.2.5
 notebooks/0.2.6
 notebooks/0.0.3
 reports/Scientific Paper
+notebooks/*.jl
+*.tmp
+*.toml
+reports/~$pstone Project Report.docx
