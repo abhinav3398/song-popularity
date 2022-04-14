@@ -40,6 +40,8 @@ from sklearn.preprocessing import MinMaxScaler, PolynomialFeatures
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, accuracy_score, r2_score, mean_absolute_error, roc_auc_score, f1_score, accuracy_score, precision_score, recall_score, confusion_matrix
+# import precision_recall_curve from sklearn
+from sklearn.metrics import precision_recall_curve, average_precision_score
 
 import logging
 # logging.basicConfig(filename='modeling.log', filemode='a', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -759,7 +761,7 @@ def plot_learning_curve(
         estimator,
         X,
         y,
-        scoring=estimator.scoring,
+        scoring=estimator.scoring if scoring is None else scoring,
         cv=cv,
         n_jobs=n_jobs,
         train_sizes=train_sizes,
@@ -872,6 +874,40 @@ def plot_confusion_matrix(y_true, y_pred, classes, title, regr=True, cmap=plt.cm
     plt.xlabel('Predicted label')
     plt.show()
 
+def plot_precision_recall_curve(y_true, y_score, title, cmap=plt.cm.Blues):
+    """
+    Plot the precision recall curve of the model.
+
+    Parameters
+    ----------
+    y_true: np.array
+        The true target of the dataset.
+    y_score: np.array
+        The predicted target of the dataset.
+    title: str
+        The title of the plot.
+    cmap: matplotlib.colors.Colormap, optional
+        The colormap used to plot the confusion matrix.
+
+    Returns
+    -------
+    None
+    """
+
+    # Compute confusion matrix
+    precision, recall, _ = precision_recall_curve(y_true, y_score)
+    average_precision = average_precision_score(y_true, y_score)
+
+    plt.step(recall, precision, color='b', alpha=0.2, where='post')
+    plt.fill_between(recall, precision, step='post', alpha=0.2, color='b')
+
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.ylim([0.0, 1.05])
+    plt.xlim([0.0, 1.0])
+    plt.title(title)
+    plt.show()
+
 def plot_roc_curve(y_true, y_score, title, cmap=plt.cm.Blues):
     """
     Plot the ROC curve of the model.
@@ -907,7 +943,7 @@ def plot_roc_curve(y_true, y_score, title, cmap=plt.cm.Blues):
     plt.legend(loc="lower right")
     plt.show()
 
-def model_evaluation(grid_search, X, y, cv=5, n_jobs=4, train_sizes=np.linspace(.1, 1.0, 5), title=None):
+def model_evaluation(grid_search, X, y, cv=5, n_jobs=4, train_sizes=np.linspace(.1, 1.0, 5), title=None, prediction_threshold=0.5):
     """
     Get extensive and exhaustive, report including the learning curve, the confusion matrix and the ROC curve.
 
@@ -950,20 +986,35 @@ def model_evaluation(grid_search, X, y, cv=5, n_jobs=4, train_sizes=np.linspace(
     # for key in report:
     #     # print("{:<20}: {:.2f}".format(key, report[key]))
     #     print(f"{key}: {report[key]}")
-    print(classification_report(y_true=y, y_pred=grid_search.predict(X=X)))
+    y_pred = grid_search.predict_proba(X=X)
+    y_pred = np.array([1 if y_pred[i][1] >= prediction_threshold else 0 for i in range(len(y_pred))])
+    print(classification_report(y_true=y, y_pred=y_pred))
 
     # Get learning curve
     # plot_learning_curve(grid_search=grid_search, X=X, y=y, title=title, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes, regr=False)
 
     # Get confusion matrix
-    plot_confusion_matrix(y_true=y, y_pred=grid_search.predict(X=X), classes=np.unique(y), title=f"Confusion matrix of {title}", regr=False)
+    plot_confusion_matrix(y_true=y, y_pred=y_pred, classes=np.unique(y), title=f"Confusion matrix of {title}", regr=False)
 
     # Get ROC curve
-    # check if the estimator has a predict_proba method
-    if hasattr(grid_search.best_estimator_, 'predict_proba'):
-        plot_roc_curve(y_true=y, y_score=grid_search.best_estimator_.predict_proba(X=X)[:, 1], title=f"ROC curve of {title}")
-    elif hasattr(grid_search.best_estimator_, 'decision_function'):
-        plot_roc_curve(y_true=y, y_score=grid_search.decision_function(X=X), title=f"ROC curve of {title}")
+    # check if the estimator has a best_estimator_ method
+    if hasattr(grid_search, 'best_estimator_'):
+        # check if the estimator has a predict_proba method
+        if hasattr(grid_search.best_estimator_, 'predict_proba'):
+            plot_roc_curve(y_true=y, y_score=grid_search.best_estimator_.predict_proba(X=X)[:, 1], title=f"ROC curve of {title}")
+            plot_precision_recall_curve(y_true=y, y_score=grid_search.best_estimator_.predict_proba(X=X)[:, 1], title=f"Precision-recall curve of {title}")
+        elif hasattr(grid_search.best_estimator_, 'decision_function'):
+            plot_roc_curve(y_true=y, y_score=grid_search.decision_function(X=X), title=f"ROC curve of {title}")
+            plot_precision_recall_curve(y_true=y, y_score=grid_search.decision_function(X=X), title=f"Precision-recall curve of {title}")
+    else:
+        # check if the estimator has a predict_proba method
+        if hasattr(grid_search, 'predict_proba'):
+            plot_roc_curve(y_true=y, y_score=grid_search.predict_proba(X=X)[:, 1], title=f"ROC curve of {title}")
+            plot_precision_recall_curve(y_true=y, y_score=grid_search.predict_proba(X=X)[:, 1], title=f"Precision-recall curve of {title}")
+        elif hasattr(grid_search, 'decision_function'):
+            plot_roc_curve(y_true=y, y_score=grid_search.decision_function(X=X), title=f"ROC curve of {title}")
+            plot_precision_recall_curve(y_true=y, y_score=grid_search.decision_function(X=X), title=f"Precision-recall curve of {title}")
+        
 
 def models_evaluation(grid_searches, X, y, cv=5, n_jobs=4, train_sizes=np.linspace(.1, 1.0, 5), titles=None):
     """
