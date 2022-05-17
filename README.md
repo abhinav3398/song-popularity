@@ -3,7 +3,7 @@ song popularity
 
 In this project we try to assess whether it is possible to get some relevent insight from external features of songs, such as acousticness, tempo, loudness, instrumentalness, song duration, etc. in order to predict song popularity.
 
-The project is organizes as followes
+The project is organized as followes
 ------------
 
     ├── LICENSE
