@@ -52,7 +52,6 @@ The project is organizes as followes
     └── tox.ini            <- tox file with settings for running tox; see tox.readthedocs.io
 
 ## Problem Statement
-___
 we will try to answerthese Business Questions:
 
 1. Is it possible to predict whether a song would be popular or not, only from external characteristics of the song and metadata, such as, Instrumentalness, Danceability, Loudness, Tempo, etc.?
@@ -64,15 +63,12 @@ we will try to answerthese Business Questions:
 For example, If we have less data then what other information would we need to improve the predictions?
 
 ## Dataset Description
----
 This work uses dataset from recent [Kaggle competition "Song Popularity Prediction”](https://www.kaggle.com/c/song-popularity-prediction) which is an exhaustive collection of audio features and metadata for about 50,000 songs. The audio features include attributes about the music track itself, such as song duration, key, audio mode, time signature, The metadata uses more abstract features, such as danceability, energy, instrumentalness, liveness, etc. This Dataset is a subset which was derived from Spotify web api which provides access to user related data, like playlists and music that the user saves in their Music library containing data regarding millions of songs and continuously being updated with new songs and changing user preference (Web API, n.d.)
 
 **The Methodology, Analysis, and Modeling of the project can be found in the the [notebooks](notebooks) as well as in th [project report](reports/Capstone-Project-Report.docx).**
 
 ## Conclusion
----
 We found that, we need more information about the song being classified as even using the best feature transformations and sophisticated models we weren't able able to get a relevent accuracy in order for the model to be reliably predict. As we have used most of the external information about the song, in our modeling and still got unsatisfied score, we will need internal characteristics of the song such as song lyrics or the actual audio data or at least portion of the song being predicted.
 
 --------
-
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
