@@ -5,8 +5,7 @@ There are several different functions which can perform the model selection: all
 are also powerful and flexible.
 In addition, almost all these functions can optionally make plots, which sum up the performed selection in a visual way.
 
-These different functions perform the model selection in different contexts, i.e. each function is specifically meant for a
-specific scenario. Certain contexts are more specific, and other are more general.
+These different functions perform the model selection in different contexts, i.e. each function is specifically meant for a specific scenario. Certain contexts are more specific, and other are more general.
 On the whole, there are six different model selection functions, divided into two main groups:
     1. functions that perform the model selection with respect to a **single dataset**;
     2. functions that perform the model selection with respect to **multiple datasets**.
@@ -44,17 +43,6 @@ from sklearn.metrics import mean_squared_error, accuracy_score, r2_score, mean_a
 from sklearn.metrics import precision_recall_curve, average_precision_score
 
 import logging
-# logging.basicConfig(filename='modeling.log', filemode='a', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-# logger = logging.getLogger()
-# handler = logging.FileHandler('modeling.log', mode='a')
-# formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
-# handler.setFormatter(formatter)
-# logger.addHandler(handler)
-# logger.setLevel(logging.INFO)
-
-# logging.info('Started logging')
-
-
 
 
 #----------------------------------------------------------------------------------------------------------------------------
