@@ -68,7 +68,7 @@ This work uses dataset from recent [Kaggle competition "Song Popularity Predicti
 **The Methodology, Analysis, and Modeling of the project can be found in the the [notebooks](notebooks) as well as in th [project report](reports/Capstone-Project-Report.docx).**
 
 ## Conclusion
-We found that, we need more information about the song being classified as even using the best feature transformations and sophisticated models we weren't able able to get a relevent accuracy in order for the model to be reliably predict. As we have used most of the external information about the song, in our modeling and still got unsatisfied score, we will need internal characteristics of the song such as song lyrics or the actual audio data or at least portion of the song being predicted.
+At the end of my project I concluded that the relationshio between the popularity of a song and the song features is pretty vague, statistically. We found that, we need more information about the song being classified as even using the best feature transformations and sophisticated models we weren't able able to get a relevent accuracy in order for the model to be reliably predict. As we have used most of the external information about the song, in our modeling and still got unsatisfied score, we will need internal characteristics of the song, as the popularity of a song is also highly influenced by the internal characeristics of the songs such as song lyrics, song audio or when and where the song was produced, which adds a subjective bias to the song popularity.
 
 --------
 <p><small>Project based on the <a target="_blank" href="https://drivendata.github.io/cookiecutter-data-science/">cookiecutter data science project template</a>. #cookiecutterdatascience</small></p>
